@@ -1,12 +1,26 @@
 pragma language_version >= 0.23;
-
 import CompactStandardLibrary;
 
-// Public ledger state - visible on blockchain
-export ledger message: Opaque<"string">;
+// ============================================================
+// AnonGate — privacy-preserving allowlist membership
+//
+// PUBLIC (on-chain, anyone can see):
+//   - memberCount: how many members have joined, total only
+//
+// PRIVATE (never touches the ledger):
+//   - secretCode: each circuit call's input is private by default
+//     in Compact; we never disclose() it, so it's never written
+//     on-chain and no observer can learn who joined or what
+//     code they used.
+// ============================================================
 
-// Circuit to store a message on the blockchain
-// The message will be publicly visible
-export circuit storeMessage(customMessage: Opaque<"string">): [] {
-    message = disclose(customMessage);
+// Public ledger state - visible on blockchain
+export ledger memberCount: Counter;
+
+// Circuit to join the allowlist.
+// secretCode is a private witness input (circuit parameters are
+// private by default) - it proves *a* valid join happened without
+// revealing who joined or what code they used.
+export circuit joinAllowlist(secretCode: Opaque<"string">): [] {
+    memberCount.increment(1);
 }
