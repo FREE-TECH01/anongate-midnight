@@ -19,6 +19,16 @@ AnonGate is a privacy-preserving access system for gated communities, events, an
 
 A Midnight Network smart contract scaffolded with create-mn-app.
 
+## Screenshots
+
+**Compact toolchain installed:**
+![Compact installed](docs/screenshots/compact_install.PNG)
+
+**Successful compile output:**
+![Compile output](docs/screenshots/compile_output.PNG)
+
+**Contract deployed to Preview:**
+![Contract deployed](docs/screenshots/helloworld_contract_deployed.PNG)
 ## Quick start
 
 Requirements: Node 22, Docker (with Compose v2), and the Compact compiler at the version pinned in `.compact-version` at the create-mn-app repo root (the version this project was scaffolded against).
