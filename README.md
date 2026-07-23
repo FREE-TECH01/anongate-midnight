@@ -1,5 +1,22 @@
 # anongate
 
+> AnonGate — a privacy-preserving membership system: prove you belong to an allowlist without revealing who you are.
+
+## Contract Address
+
+| Network | Address |
+|---------|---------|
+| Preview | `48df3d01d2a381c2e967deaff0d64d8a8df9bda927290036b163326aecd210d8` |
+
+## Initial Idea
+
+AnonGate is a privacy-preserving access system for gated communities, events, and resources. A community admin maintains a private allowlist, and members prove they belong to it — to unlock a gated chat, event, or resource — without revealing *which* member they are or exposing the allowlist itself on-chain. This targets the "Private Allowlist Access" problem from the Level 3 idea list: most token-gating and allowlist systems today either expose the full member list publicly or rely on a centralized server to check membership, both of which leak who's part of a group. AnonGate uses Midnight's private witness model so membership can be proven, not disclosed.
+
+## Public State vs. Private Witness
+
+- **Public (on-chain, in the ledger):** `memberCount`, a running total of how many members have joined. Anyone can see the total membership size.
+- **Private (witness, never touches the ledger):** `secretCode`, the input to the `joinAllowlist` circuit. Compact treats circuit parameters as private by default — `secretCode` is never written to public state, and no `disclose()` is called on it. An on-chain observer can see that *someone* joined (the counter incremented) but never who, or what their code was.
+
 A Midnight Network smart contract scaffolded with create-mn-app.
 
 ## Quick start
