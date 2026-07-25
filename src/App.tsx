@@ -12,12 +12,20 @@ export function App() {
   return (
     <main className="app-shell">
       <section className="hero-card">
-        <p className="eyebrow">Private allowlist access</p>
+        <div className="hero-badge-row">
+          <span className="eyebrow">Private allowlist access</span>
+          <span className="status-pill">{networkLabel}</span>
+        </div>
         <h1>AnonGate</h1>
         <p className="intro">
           Connect your Lace wallet, prove membership locally, and submit the result without exposing your private input in the UI.
         </p>
-        <div className="status-pill">{networkLabel}</div>
+        <div className="hero-highlights" aria-label="Key benefits">
+          <span>🔒 Private input stays hidden</span>
+          <span>🌐 Public counter is visible on-chain</span>
+          <span>⚡ Real Midnight proof flow</span>
+        </div>
+        <div className="hero-model-pill">🛡️ Zero-knowledge privacy model</div>
       </section>
 
       <section className="panel-grid">
