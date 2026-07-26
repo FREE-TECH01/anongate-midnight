@@ -1,4 +1,6 @@
+import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { normalizeSecretCode, maskSecretCode } from './utils';
+import { callJoinAllowlist } from './contract-caller';
 
 export interface JoinState {
   status: 'idle' | 'connecting' | 'submitting' | 'success' | 'error';
@@ -7,31 +9,27 @@ export interface JoinState {
   memberCount?: number;
 }
 
-export async function joinAllowlist(secretCode: string): Promise<JoinState> {
+export interface JoinAllowlistParams {
+  secretCode: string;
+  contractAddress: string;
+  connectedAPI: ConnectedAPI;
+  contractModule: {
+    AnonGate: any;
+    compiledContract: any;
+  };
+}
+
+export async function joinAllowlist(params: JoinAllowlistParams): Promise<JoinState> {
+  const { secretCode, contractAddress, connectedAPI, contractModule } = params;
   const normalized = normalizeSecretCode(secretCode);
   const masked = maskSecretCode(normalized);
 
-  const response = await fetch('/api/submit-join', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secretCode: normalized }),
-  });
-
-  let payload: any = null;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new Error('The submission endpoint returned an invalid response.');
-  }
-
-  if (!response.ok || payload.ok === false) {
-    throw new Error(payload?.error || 'The proof submission failed.');
-  }
+  const result = await callJoinAllowlist(contractModule, contractAddress, normalized, connectedAPI);
 
   return {
     status: 'success',
-    message: payload?.message || `Your private code was accepted and kept hidden. The UI only displays ${masked}.`,
-    txId: payload?.txId,
-    memberCount: payload?.memberCount,
+    message: `Your private code was accepted and kept hidden. The UI only displays ${masked}.`,
+    txId: result.txId,
+    memberCount: result.memberCount,
   };
 }

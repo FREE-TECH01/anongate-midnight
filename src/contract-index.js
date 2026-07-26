@@ -1,0 +1,1 @@
+../contracts/managed/hello-world/contract/index.js

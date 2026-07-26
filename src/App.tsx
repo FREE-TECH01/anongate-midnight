@@ -1,13 +1,40 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { WalletConnect } from './components/WalletConnect';
 import { CircuitCall } from './components/CircuitCall';
 import { useMidnight } from './hooks/useMidnight';
+import { CompiledContract } from '@midnight-ntwrk/midnight-js-protocol/compact-js';
 
-const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS || '48df3d01d2a381c2e967deaff0d64d8a8df9bda927290036b163326aecd210d8';
+const CONTRACT_ADDRESS =
+  import.meta.env.VITE_CONTRACT_ADDRESS ||
+  '48df3d01d2a381c2e967deaff0d64d8a8df9bda927290036b163326aecd210d8';
 
 export function App() {
   const midnight = useMidnight();
-  const networkLabel = useMemo(() => (midnight.address ? 'Preview / Preprod-ready' : 'Disconnected'), [midnight.address]);
+  const [contractModule, setContractModule] =
+    useState<{ AnonGate: any; compiledContract: any } | null>(null);
+  const [contractLoadError, setContractLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const AnonGate = await import('./contract-index.js');
+        const compiledContract = CompiledContract.make(
+          'hello-world',
+          AnonGate.Contract,
+        ).pipe(CompiledContract.withVacantWitnesses);
+        setContractModule({ AnonGate, compiledContract });
+      } catch (err) {
+        setContractLoadError(
+          err instanceof Error ? err.message : 'Failed to load contract module.',
+        );
+      }
+    })();
+  }, []);
+
+  const networkLabel = useMemo(
+    () => (midnight.address ? 'Preview / Preprod-ready' : 'Disconnected'),
+    [midnight.address],
+  );
 
   return (
     <main className="app-shell">
@@ -18,7 +45,8 @@ export function App() {
         </div>
         <h1>AnonGate</h1>
         <p className="intro">
-          Connect your Lace wallet, prove membership locally, and submit the result without exposing your private input in the UI.
+          Connect your Lace wallet, prove membership locally, and submit the result without
+          exposing your private input in the UI.
         </p>
         <div className="hero-highlights" aria-label="Key benefits">
           <span>🔒 Private input stays hidden</span>
@@ -26,6 +54,11 @@ export function App() {
           <span>⚡ Real Midnight proof flow</span>
         </div>
         <div className="hero-model-pill">🛡️ Zero-knowledge privacy model</div>
+        {contractLoadError && (
+          <div className="error" style={{ marginTop: '0.75rem' }}>
+            Contract load error: {contractLoadError}
+          </div>
+        )}
       </section>
 
       <section className="panel-grid">
@@ -39,6 +72,8 @@ export function App() {
         <CircuitCall
           contractAddress={CONTRACT_ADDRESS}
           connected={midnight.status === 'connected'}
+          connectedAPI={midnight.connectedAPI}
+          contractModule={contractModule}
           onConnectRequired={midnight.connect}
         />
       </section>
