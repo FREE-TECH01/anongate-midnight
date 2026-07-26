@@ -1,7 +1,9 @@
-name: Deploy frontend
+name: Build & test
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
 
 jobs:
@@ -14,4 +16,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build:frontend
+      - run: npm run compile
+      - run: npm run build
+      - run: npm run test:unit
