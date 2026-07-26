@@ -1,6 +1,7 @@
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { createProofProvider } from '@midnight-ntwrk/midnight-js-types';
 import { createUnprovenCallTx, submitTx } from '@midnight-ntwrk/midnight-js-contracts';
+import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 import { BrowserZkConfigProvider } from './browser-zk-config';
@@ -38,8 +39,26 @@ export async function callJoinAllowlist(
   const walletEncryptionPublicKey = shieldedAddresses.shieldedEncryptionPublicKey;
 
   const keyMaterialProvider = zkConfigProvider.asKeyMaterialProvider();
-  const provingProvider = await connectedAPI.getProvingProvider(keyMaterialProvider);
-  const proofProvider = createProofProvider(provingProvider);
+
+  let provingProvider: any = null;
+  let proofProvider: any = null;
+
+  try {
+    provingProvider = await connectedAPI.getProvingProvider(keyMaterialProvider);
+    if (provingProvider && typeof provingProvider.prove === 'function') {
+      proofProvider = createProofProvider(provingProvider);
+    }
+  } catch {
+    // Lace proving provider not available — fall back to proof server
+  }
+
+  if (!proofProvider) {
+    const proofServerUrl =
+      networkId === 'preprod'
+        ? 'https://proof-server.preprod.midnight.network'
+        : 'https://proof-server.preview.midnight.network';
+    proofProvider = httpClientProofProvider(proofServerUrl, zkConfigProvider);
+  }
 
   const indexerUrl =
     networkId === 'preprod'
