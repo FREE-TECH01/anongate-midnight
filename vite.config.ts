@@ -75,6 +75,9 @@ export default defineConfig({
       allow: ['..', '../..'],
     },
   },
+  define: {
+    global: 'globalThis',
+  },
   test: {
     environment: 'jsdom',
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
