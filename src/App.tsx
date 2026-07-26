@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { WalletConnect } from './components/WalletConnect';
 import { CircuitCall } from './components/CircuitCall';
 import { useMidnight } from './hooks/useMidnight';
-import { CompiledContract } from '@midnight-ntwrk/midnight-js-protocol/compact-js';
+import { loadContractModule } from './frontend/contract-loader';
+import type { ContractModule } from './frontend/contract-loader';
 
 const CONTRACT_ADDRESS =
   import.meta.env.VITE_CONTRACT_ADDRESS ||
@@ -10,19 +11,13 @@ const CONTRACT_ADDRESS =
 
 export function App() {
   const midnight = useMidnight();
-  const [contractModule, setContractModule] =
-    useState<{ AnonGate: any; compiledContract: any } | null>(null);
+  const [contractModule, setContractModule] = useState<ContractModule | null>(null);
   const [contractLoadError, setContractLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       try {
-        const AnonGate = await import('./contract-index.js');
-        const compiledContract = CompiledContract.make(
-          'hello-world',
-          AnonGate.Contract,
-        ).pipe(CompiledContract.withVacantWitnesses);
-        setContractModule({ AnonGate, compiledContract });
+        setContractModule(await loadContractModule());
       } catch (err) {
         setContractLoadError(
           err instanceof Error ? err.message : 'Failed to load contract module.',

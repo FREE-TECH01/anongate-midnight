@@ -1,4 +1,5 @@
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
+import type { ContractModule } from './contract-loader';
 import { normalizeSecretCode, maskSecretCode } from './utils';
 import { callJoinAllowlist } from './contract-caller';
 
@@ -13,10 +14,7 @@ export interface JoinAllowlistParams {
   secretCode: string;
   contractAddress: string;
   connectedAPI: ConnectedAPI;
-  contractModule: {
-    AnonGate: any;
-    compiledContract: any;
-  };
+  contractModule: ContractModule;
 }
 
 export async function joinAllowlist(params: JoinAllowlistParams): Promise<JoinState> {

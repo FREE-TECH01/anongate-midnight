@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
+import type { ContractModule } from '../frontend/contract-loader';
 import { joinAllowlist } from '../frontend/app';
 import { maskSecretCode, normalizeSecretCode } from '../frontend/utils';
 
@@ -7,7 +8,7 @@ interface CircuitCallProps {
   contractAddress: string;
   connected: boolean;
   connectedAPI: ConnectedAPI | null;
-  contractModule: { AnonGate: any; compiledContract: any } | null;
+  contractModule: ContractModule | null;
   onConnectRequired: () => Promise<void>;
 }
 
