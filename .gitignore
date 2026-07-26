@@ -15,8 +15,8 @@ build/
 .env.test.local
 .env.production.local
 
-# Contract artifacts
-contracts/managed/
+# Contract artifacts (compiled output needed for browser build)
+# contracts/managed/ — intentionally committed, required by Vite bundler
 
 # Deployment info
 deployment.json
