@@ -1,10 +1,20 @@
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { createProofProvider } from '@midnight-ntwrk/midnight-js-types';
-import { findDeployedContract } from '@midnight-ntwrk/midnight-js-contracts';
+import { createUnprovenCallTx, submitTx } from '@midnight-ntwrk/midnight-js-contracts';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { BrowserZkConfigProvider } from './browser-zk-config';
 
-const PRIVATE_STATE_ID = 'helloWorldPrivateState';
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  return new Uint8Array(
+    (hex.match(/.{1,2}/g) ?? []).map((byte) => parseInt(byte, 16)),
+  );
+}
 
 export interface ContractCallResult {
   txId: string;
@@ -20,24 +30,8 @@ export async function callJoinAllowlist(
   const zkConfigProvider = new BrowserZkConfigProvider();
 
   const shieldedAddresses = await connectedAPI.getShieldedAddresses();
-
-  const walletProvider = {
-    getCoinPublicKey: () => shieldedAddresses.shieldedCoinPublicKey,
-    getEncryptionPublicKey: () => shieldedAddresses.shieldedEncryptionPublicKey,
-    balanceTx: async (tx: any, _ttl?: Date) => {
-      const serialized = typeof tx === 'string' ? tx : JSON.stringify(tx);
-      const result = await connectedAPI.balanceUnsealedTransaction(serialized);
-      return JSON.parse(result.tx);
-    },
-  };
-
-  const midnightProvider = {
-    submitTx: async (tx: any) => {
-      const serialized = typeof tx === 'string' ? tx : JSON.stringify(tx);
-      await connectedAPI.submitTransaction(serialized);
-      return 'submitted' as any;
-    },
-  };
+  const coinPublicKey = shieldedAddresses.shieldedCoinPublicKey;
+  const walletEncryptionPublicKey = shieldedAddresses.shieldedEncryptionPublicKey;
 
   const keyMaterialProvider = zkConfigProvider.asKeyMaterialProvider();
   const provingProvider = await connectedAPI.getProvingProvider(keyMaterialProvider);
@@ -55,46 +49,87 @@ export async function callJoinAllowlist(
 
   const publicDataProvider = indexerPublicDataProvider(indexerUrl, indexerWsUrl);
 
+  const walletProvider = {
+    getCoinPublicKey: () => coinPublicKey,
+    getEncryptionPublicKey: () => walletEncryptionPublicKey,
+    balanceTx: async (tx: any) => {
+      const serialized = tx.serialize() as Uint8Array;
+      const hex = bytesToHex(serialized);
+      const result = await connectedAPI.balanceUnsealedTransaction(hex);
+      const balancedBytes = hexToBytes(result.tx);
+      return (tx.constructor as any).deserialize(
+        'signature',
+        'proof',
+        'binding',
+        balancedBytes,
+      );
+    },
+  };
+
+  const midnightProvider = {
+    submitTx: async (tx: any) => {
+      const serialized = tx.serialize() as Uint8Array;
+      const hex = bytesToHex(serialized);
+      await connectedAPI.submitTransaction(hex);
+      return tx.hash();
+    },
+  };
+
   const privateStateProvider = {
     setContractAddress: () => {},
     set: async () => {},
-    get: async () => null,
+    get: async () => null as any,
     remove: async () => {},
     clear: async () => {},
     setSigningKey: async () => {},
-    getSigningKey: async () => null,
+    getSigningKey: async () => null as any,
     removeSigningKey: async () => {},
     clearSigningKeys: async () => {},
-    exportPrivateStates: async () => ({ format: 'midnight-private-state-export' as const, encryptedPayload: '', salt: '' }),
+    exportPrivateStates: async () => ({
+      format: 'midnight-private-state-export' as const,
+      encryptedPayload: '',
+      salt: '',
+    }),
     importPrivateStates: async () => ({ imported: 0, skipped: 0, overwritten: 0 }),
-    exportSigningKeys: async () => ({ format: 'midnight-signing-key-export' as const, encryptedPayload: '', salt: '' }),
+    exportSigningKeys: async () => ({
+      format: 'midnight-signing-key-export' as const,
+      encryptedPayload: '',
+      salt: '',
+    }),
     importSigningKeys: async () => ({ imported: 0, skipped: 0, overwritten: 0 }),
   };
 
-  const deployed: any = await findDeployedContract(
-    {
-      privateStateProvider,
-      publicDataProvider,
-      zkConfigProvider,
-      proofProvider,
-      walletProvider,
-      midnightProvider,
-    } as any,
+  const unprovenTxData = await createUnprovenCallTx(
+    { zkConfigProvider, publicDataProvider, walletProvider } as any,
     {
       compiledContract: contractModule.compiledContract,
       contractAddress,
-      privateStateId: PRIVATE_STATE_ID,
-      initialPrivateState: {},
-    },
+      circuitId: 'joinAllowlist' as any,
+      args: [secretCode],
+      coinPublicKey,
+    } as any,
   );
 
-  const tx = await deployed.callTx.joinAllowlist(secretCode);
+  const finalized = await submitTx(
+    {
+      zkConfigProvider,
+      publicDataProvider,
+      proofProvider,
+      walletProvider,
+      midnightProvider,
+      privateStateProvider,
+    } as any,
+    {
+      unprovenTx: (unprovenTxData as any).unprovenTx,
+      circuitId: 'joinAllowlist' as any,
+    },
+  );
 
   const state = await publicDataProvider.queryContractState(contractAddress);
   const ledgerState = contractModule.AnonGate.ledger(state!.data);
 
   return {
-    txId: tx.public.txId,
+    txId: (finalized as any).public?.txId ?? 'submitted',
     memberCount: Number(ledgerState.memberCount),
   };
 }
