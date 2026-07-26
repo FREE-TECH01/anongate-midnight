@@ -4,6 +4,42 @@ import type { ContractModule } from '../frontend/contract-loader';
 import { joinAllowlist } from '../frontend/app';
 import { maskSecretCode, normalizeSecretCode } from '../frontend/utils';
 
+function safeStringify(value: unknown): string {
+  const seen = new WeakSet();
+  try {
+    return (
+      JSON.stringify(
+        value,
+        (_key, val) => {
+          if (typeof val === 'bigint') return val.toString();
+          if (typeof val === 'function') return `[Function ${val.name || 'anonymous'}]`;
+          if (val instanceof Uint8Array) return `[Uint8Array(${val.length})]`;
+          if (typeof val === 'object' && val !== null) {
+            if (seen.has(val)) return '[Circular]';
+            seen.add(val);
+          }
+          return val;
+        },
+        2,
+      ) ?? String(value)
+    );
+  } catch (stringifyErr) {
+    return `[JSON.stringify failed: ${stringifyErr}]`;
+  }
+}
+
+// Effect library Cause objects are a union: Fail(.error), Die(.defect),
+// Interrupt, Sequential(.left/.right), Parallel(.left/.right) — walk them all.
+function logEffectCause(cause: any, depth = 0): void {
+  if (cause == null || depth > 6) return;
+  const prefix = `[AnonGate] cause[depth=${depth}]`;
+  console.error(prefix, '_tag:', cause._tag, '| keys:', Object.keys(cause));
+  if (cause.error !== undefined) console.error(prefix, '.error =', cause.error);
+  if (cause.defect !== undefined) console.error(prefix, '.defect =', cause.defect);
+  if (cause.left !== undefined) logEffectCause(cause.left, depth + 1);
+  if (cause.right !== undefined) logEffectCause(cause.right, depth + 1);
+}
+
 interface CircuitCallProps {
   contractAddress: string;
   connected: boolean;
@@ -29,6 +65,20 @@ export function CircuitCall({
     if (contractAddress.length <= 12) return contractAddress;
     return `${contractAddress.slice(0, 6)}…${contractAddress.slice(-6)}`;
   }, [contractAddress]);
+
+  // Wallet can show "connected" (restored from localStorage) while connectedAPI
+  // is still null — the button must show a visible pending state instead of
+  // letting the click be swallowed by the guard below.
+  const walletPending = connected && !connectedAPI;
+  const modulePending = connected && !!connectedAPI && !contractModule;
+  const buttonDisabled = isLoading || walletPending || modulePending;
+  const buttonLabel = isLoading
+    ? 'Generating proof…'
+    : walletPending
+      ? 'Connecting to wallet…'
+      : modulePending
+        ? 'Loading contract…'
+        : 'Join allowlist';
 
   const handleCall = async () => {
     console.log('[AnonGate] handleCall triggered', { connected, hasAPI: !!connectedAPI, hasModule: !!contractModule });
@@ -64,7 +114,18 @@ export function CircuitCall({
       window.localStorage.setItem('anongate-last-proof', 'proved');
     } catch (err) {
       console.error('[AnonGate] joinAllowlist failed:', err);
-      const message = err instanceof Error ? err.message : 'The proof submission failed.';
+      const e = err as any;
+      if (e?.stack) console.error('[AnonGate] error stack:', e.stack);
+      console.error('[AnonGate] cause keys:', e?.cause ? Object.keys(e.cause) : '(no cause property)');
+      console.error('[AnonGate] cause object:', e?.cause);
+      console.error('[AnonGate] cause stringified:', safeStringify(e?.cause));
+      console.error('[AnonGate] cause.defect:', e?.cause?.defect);
+      console.error('[AnonGate] cause.error:', e?.cause?.error);
+      logEffectCause(e?.cause);
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : `The proof submission failed (${e?._id ?? 'unknown error'}) — see browser console for full details.`;
       setError(message);
     } finally {
       setIsLoading(false);
@@ -115,9 +176,14 @@ export function CircuitCall({
       </div>
 
       <div className="button-row">
-        <button onClick={() => void handleCall()} disabled={isLoading}>
-          {isLoading ? 'Generating proof…' : 'Join allowlist'}
+        <button onClick={() => void handleCall()} disabled={buttonDisabled}>
+          {buttonLabel}
         </button>
+        {walletPending ? (
+          <p className="panel-help">
+            Establishing wallet connection… this can take a few seconds after approving in Lace.
+          </p>
+        ) : null}
       </div>
       <div className="proof-strip" aria-live="polite">
         <p className="proof-label">Proved without revealing your input</p>
