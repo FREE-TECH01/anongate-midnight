@@ -2,6 +2,7 @@ import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { createProofProvider } from '@midnight-ntwrk/midnight-js-types';
 import { createUnprovenCallTx, submitTx } from '@midnight-ntwrk/midnight-js-contracts';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
+import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
 import { BrowserZkConfigProvider } from './browser-zk-config';
 
 function bytesToHex(bytes: Uint8Array): string {
@@ -27,6 +28,9 @@ export async function callJoinAllowlist(
   secretCode: string,
   connectedAPI: ConnectedAPI,
 ): Promise<ContractCallResult> {
+  const networkId = import.meta.env.VITE_NETWORK || 'preview';
+  setNetworkId(networkId);
+
   const zkConfigProvider = new BrowserZkConfigProvider();
 
   const shieldedAddresses = await connectedAPI.getShieldedAddresses();
@@ -37,7 +41,6 @@ export async function callJoinAllowlist(
   const provingProvider = await connectedAPI.getProvingProvider(keyMaterialProvider);
   const proofProvider = createProofProvider(provingProvider);
 
-  const networkId = import.meta.env.VITE_NETWORK || 'preview';
   const indexerUrl =
     networkId === 'preprod'
       ? 'https://indexer.preprod.midnight.network/api/v4/graphql'
