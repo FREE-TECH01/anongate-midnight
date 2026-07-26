@@ -1,6 +1,10 @@
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { createProofProvider } from '@midnight-ntwrk/midnight-js-types';
-import { createUnprovenCallTx, submitTx } from '@midnight-ntwrk/midnight-js-contracts';
+import {
+  createProofProvider,
+  SucceedEntirely,
+  type FinalizedTxData,
+} from '@midnight-ntwrk/midnight-js-types';
+import { createUnprovenCallTx, submitTxAsync } from '@midnight-ntwrk/midnight-js-contracts';
 import { httpClientProofProvider } from '@midnight-ntwrk/midnight-js-http-client-proof-provider';
 import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-public-data-provider';
 import { setNetworkId } from '@midnight-ntwrk/midnight-js-network-id';
@@ -93,7 +97,8 @@ export async function callJoinAllowlist(
       const serialized = tx.serialize() as Uint8Array;
       const hex = bytesToHex(serialized);
       await connectedAPI.submitTransaction(hex);
-      return tx.hash();
+      const ids = tx.identifiers() as string[];
+      return ids[0] ?? tx.hash();
     },
   };
 
@@ -132,26 +137,69 @@ export async function callJoinAllowlist(
     } as any,
   );
 
-  const finalized = await submitTx(
-    {
-      zkConfigProvider,
-      publicDataProvider,
-      proofProvider,
-      walletProvider,
-      midnightProvider,
-      privateStateProvider,
-    } as any,
-    {
-      unprovenTx: (unprovenTxData as any).unprovenTx,
-      circuitId: 'joinAllowlist' as any,
-    },
-  );
+  let memberCountBefore = 0;
+  try {
+    const beforeState = await publicDataProvider.queryContractState(contractAddress);
+    if (beforeState?.data) {
+      const beforeLedger = contractModule.AnonGate.ledger(beforeState.data);
+      memberCountBefore = Number(beforeLedger.memberCount);
+    }
+  } catch {
+    // best effort — use 0 as fallback
+  }
 
-  const state = await publicDataProvider.queryContractState(contractAddress);
-  const ledgerState = contractModule.AnonGate.ledger(state!.data);
+  const providers = {
+    zkConfigProvider,
+    publicDataProvider,
+    proofProvider,
+    walletProvider,
+    midnightProvider,
+    privateStateProvider,
+  } as any;
+
+  const txId = await submitTxAsync(providers, {
+    unprovenTx: (unprovenTxData as any).private?.unprovenTx,
+    circuitId: 'joinAllowlist' as any,
+  });
+
+  console.log('[AnonGate] Transaction submitted via Lace:', txId);
+
+  let finalized: FinalizedTxData | null = null;
+  try {
+    finalized = await Promise.race([
+      publicDataProvider.watchForTxData(txId),
+      new Promise<FinalizedTxData>((_, reject) =>
+        setTimeout(() => reject(new Error('Timed out waiting for transaction finalization')), 30_000),
+      ),
+    ]);
+    console.log('[AnonGate] Transaction finalized:', finalized.status);
+  } catch {
+    console.warn('[AnonGate] Transaction not yet finalized on chain — will poll for state changes...');
+  }
+
+  if (finalized && finalized.status !== SucceedEntirely) {
+    throw new Error(
+      `Transaction was not fully successful (status: ${finalized.status}). ` +
+        'The on-chain state was not updated.',
+    );
+  }
+
+  let memberCount = memberCountBefore;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const state = await publicDataProvider.queryContractState(contractAddress);
+    if (state?.data) {
+      const ledgerState = contractModule.AnonGate.ledger(state.data);
+      memberCount = Number(ledgerState.memberCount);
+      if (memberCount > memberCountBefore) {
+        console.log('[AnonGate] Member count increased from', memberCountBefore, 'to', memberCount);
+        break;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
 
   return {
-    txId: (finalized as any).public?.txId ?? 'submitted',
-    memberCount: Number(ledgerState.memberCount),
+    txId: finalized?.txId ?? txId,
+    memberCount,
   };
 }
