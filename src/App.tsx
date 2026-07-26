@@ -55,9 +55,14 @@ export function App() {
         </div>
         <div className="hero-model-pill">🛡️ Zero-knowledge privacy model</div>
         {contractLoadError && (
-          <div className="error" style={{ marginTop: '0.75rem' }}>
-            Contract load error: {contractLoadError}
+          <div className="error hero-error">
+            Failed to load the contract module. Run <code>npm run compile</code> and refresh.
+            <br />
+            <small>{contractLoadError}</small>
           </div>
+        )}
+        {!contractModule && !contractLoadError && (
+          <div className="loading hero-loading">Loading contract module…</div>
         )}
       </section>
 
