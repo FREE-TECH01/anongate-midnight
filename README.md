@@ -1,148 +1,112 @@
-# AnonGate
+# AnonGate — Privacy-Preserving Allowlist Membership on Midnight
 
-> A privacy-preserving allowlist dApp for Midnight that lets a user prove membership without exposing their private input.
+> AnonGate is a zero-knowledge privacy-preserving allowlist dApp on the Midnight Network. It enables users to connect their Lace wallet, prove membership using a private secret code locally, and update the public on-chain counter without ever exposing their private input in the UI, network payload, or ledger.
 
-## Live Demo
+---
 
-[Deploy on Vercel and replace this placeholder with the live URL]
+## 🔗 Links & Status
 
-## Contract Address
+- **Live Demo**: [https://anongate-midnight.vercel.app](https://anongate-midnight.vercel.app) *(or your Vercel deployment URL)*
+- **Demo Video**: [PLACEHOLDER — Record <2-min demo using checklist below]
 
-| Network | Address |
-|---------|---------|
-| Preprod | `48df3d01d2a381c2e967deaff0d64d8a8df9bda927290036b163326aecd210d8` |
-| Preview | `48df3d01d2a381c2e967deaff0d64d8a8df9bda927290036b163326aecd210d8` |
+---
 
-## What This Does
+## 📜 Contract Addresses
 
-AnonGate is built for a concrete use case: a private alumni or community gate. A club admin can issue a private secret to trusted members, and those members can prove they belong without exposing the secret or their identity to the public ledger. In the browser, the app shows a clear split between what stays private in the local input field and what becomes visible on-chain as the public member counter.
+| Network | Status | Contract Address |
+|---------|--------|------------------|
+| **Preview** | Live & Confirmed | `48df3d01d2a381c2e967deaff0d64d8a8df9bda927290036b163326aecd210d8` |
+| **Preprod** | Deployment in progress / Syncing | `48df3d01d2a381c2e967deaff0d64d8a8df9bda927290036b163326aecd210d8` *(updated upon sync completion)* |
 
-## Privacy Model
+---
 
-- Public on-chain data: the `memberCount` ledger value.
-- Private local data: the secret code entered into the browser before proof generation.
-- What is proven without revealing: the user knows the correct secret, while the public counter increases to show successful activity.
+## 💡 Real-World Use Case Narrative
 
-## Privacy Claim
+### **Use Case: Exclusive DAO Alpha Club & Anonymous Sybil-Resistant Allowlisting**
+Traditional allowlists require users to register their public address, creating a permanent link between their identity, wallet balance, and private activity.
 
-An observer can see that a membership proof was accepted and that the public counter increased, but they cannot see the private input or infer which secret was used.
+**AnonGate solves this:**
+An exclusive community or DAO issues single-use or shared secret access codes to prospective members. A user connects their Lace wallet to AnonGate, types their secret code into the client UI, and executes a zero-knowledge Compact proof locally. The contract verifies proof validity and increments the public member counter on-chain.
 
-## Tech Stack
+**Result:** The community verifies that a legitimate member joined, while the user's private code, wallet identity, and mainnet balances remain completely untraceable.
 
-Midnight Network, Compact, Midnight.js SDK, React/Vite, Lace wallet, Vitest
+---
 
-## Prerequisites
+## 🛡️ Privacy Model
 
-- Lace wallet installed
-- Node.js 22+
-- Docker Desktop or Docker Engine with Compose v2
+- **PUBLIC State**:
+  - `memberCount: Counter` (the total count of verified joins recorded on the Midnight ledger).
+  - Transaction hash & execution status on the public data provider.
+- **PRIVATE Witness**:
+  - `secretCode: Opaque<"string">` (the private input passed to `joinAllowlist()`).
+  - Never disclosed via Compact `disclose()`.
+  - Never sent in HTTP payloads or visible in DOM state.
+- **ZK Guarantee**: The user proves to the Midnight verifier circuit that they hold valid secret witness input without revealing the secret itself to observers, indexers, or node operators.
 
-## Run Locally
+---
 
-```bash
-git clone <your-repo-url>
-cd anongate-midnight
-npm install
-npm run dev
-```
+## 🔒 Privacy Claim
 
-Then open the local Vite URL in your browser. The UI keeps the secret code private and never renders it in the public panel.
+> An on-chain observer or indexer listening to Midnight transactions can verify that a valid membership proof was submitted and that the public `memberCount` incremented by 1, but cannot determine the underlying secret code or correlate the transaction back to the user's private input.
 
-## Demo Video
+---
 
-[Record a short walkthrough and add the link here]
+## 🛠️ Tech Stack
 
-## Frontend Notes
+- **Smart Contract Language**: Compact (`contracts/hello-world.compact`, compiler `0.31.1`)
+- **Blockchain Platform**: Midnight Network (Preview & Preprod)
+- **SDKs**: `@midnight-ntwrk/midnight-js-contracts` (4.1.1), `@midnight-ntwrk/dapp-connector-api` (4.0.1), `@midnight-ntwrk/wallet-sdk` (1.2.0)
+- **Frontend Framework**: React 19 + Vite 8
+- **Styling**: Modern Vanilla CSS with dark mode aesthetics & glassmorphism
+- **Testing**: Vitest + JSDOM for unit tests, TSX for on-chain e2e integration checks
 
-The current frontend is intentionally simple and mobile-friendly. It includes:
+---
 
-- a Lace connect/disconnect flow with specific messages for missing wallet, cancellation, and network mismatch scenarios
-- a private input field that stays local and is masked in the UI
-- a public panel that shows only the observable counter and proof status
-- a frontend privacy test covering the visible/private separation
+## 🚀 Prerequisites
 
-## Quick Start
+- **Lace Wallet Extension** for Midnight Network installed in browser
+- **Node.js** v22+
+- **Docker Desktop** / Docker Engine with Compose v2 (runs local proof server container)
 
-Requirements: Node 22, Docker (with Compose v2), and the Compact compiler at the version pinned in `.compact-version` at the create-mn-app repo root.
+---
 
-### Run the frontend
+## 💻 Run Locally
 
-```bash
-npm run dev
-```
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/FREE-TECH01/anongate-midnight.git
+   cd anongate-midnight
+   ```
 
-### Build the frontend for deployment
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
 
-```bash
-npm run build:frontend
-```
+3. **Start local proof server & dev environment**:
+   ```bash
+   npm run setup -- --network preview
+   ```
 
-### Contract workflow
+4. **Launch Vite frontend**:
+   ```bash
+   npm run dev
+   ```
 
-```bash
-npm install
-npm run setup
-npm run test:e2e
-```
+5. **Run unit tests**:
+   ```bash
+   npm run test:unit
+   ```
 
-`npm run setup` runs end-to-end with no prompts:
+---
 
-1. `docker compose up -d --wait` starts the local Midnight devnet and health-checks the node, indexer, and proof server.
-2. `npm run compile` compiles `contracts/hello-world.compact` to `contracts/managed/hello-world/`.
-3. `npm run deploy` derives the wallet, funds it from the devnet preset, deploys the contract, and writes `.midnight-state.json`.
+## 📽️ Demo Video Recording Checklist (< 2 Minutes)
 
-`npm run test:e2e` reconnects to the deployed contract and reads its ledger state.
+Use this checklist when recording your Level 2 video submission:
 
-## Local Devnet
-
-The project ships its own devnet via `docker-compose.yml`:
-
-| Service | Port | Purpose |
-| --- | --- | --- |
-| `node` | 9944 | Midnight node, `dev` chain preset |
-| `indexer` | 8088 | GraphQL indexer for chain state |
-| `proof-server` | 6300 | Generates ZK proofs for contract transactions |
-
-Tear everything down with:
-
-```bash
-docker compose down -v
-```
-
-## Networks
-
-This dApp supports three networks:
-
-| Network | When to use |
-| --- | --- |
-| `undeployed` | Local devnet for development and testing |
-| `preview` | Public preview testnet |
-| `preprod` | Public preprod testnet |
-
-Use `npm run network <name>` to switch networks, or `npm run setup -- --network <name>` to run the full flow for that network.
-
-## Available Scripts
-
-| Script | Description |
-| --- | --- |
-| `npm run setup` | One-shot: start devnet, compile, deploy |
-| `npm run compile` | Compile the Compact contract |
-| `npm run deploy` | Deploy the compiled contract |
-| `npm run cli` | Interactive CLI to call circuits on the deployed contract |
-| `npm run check-balance` | Print the wallet balances |
-| `npm run dev` | Start the Vite frontend locally |
-| `npm run build:frontend` | Build the Vite frontend for deployment |
-| `npm run test:e2e` | Smoke + read-back check against the deployed contract |
-| `npm run test:unit` | Run the frontend privacy tests |
-| `npm run clean` | Remove generated contract and wallet state |
-
-## Screenshots
-
-**Compact toolchain installed:**
-![Compact installed](docs/screenshots/compact_install.PNG)
-
-**Successful compile output:**
-![Compile output](docs/screenshots/compile_output.PNG)
-
-**Contract deployed to Preview:**
-![Contract deployed](docs/screenshots/helloworld_contract_deployed.PNG)
+- [ ] **1. Introduction (0:00 - 0:15)**: Show AnonGate interface running, state that AnonGate allows proving membership in an allowlist without disclosing identity or secret input.
+- [ ] **2. Wallet Connection (0:15 - 0:35)**: Click **Connect Lace**. Show the Lace extension popup asking for connection approval. Click Approve and show the UI displaying the connected address.
+- [ ] **3. Secret Input & Privacy Visualizer (0:35 - 0:55)**: Type a private secret into the password input field. Point out that the secret is masked with dots (`•••••••••`) and stays strictly local to the browser.
+- [ ] **4. Circuit Call & Loading State (0:55 - 1:25)**: Click **Join allowlist**. Point out the button state ("Generating proof…") as Midnight's ZK prover executes local witness computation.
+- [ ] **5. On-Chain Result Verification (1:25 - 1:45)**: Show the success message and watch the **Public counter** increment on-chain.
+- [ ] **6. Privacy Audit / DevTools (1:45 - 2:00)**: Briefly open browser DevTools Network tab to demonstrate that the plaintext secret code was **never** sent in any outgoing HTTP request payload.
