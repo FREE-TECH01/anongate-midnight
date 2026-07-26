@@ -33,6 +33,8 @@ export async function callJoinAllowlist(
   secretCode: string,
   connectedAPI: ConnectedAPI,
 ): Promise<ContractCallResult> {
+  console.log('[AnonGate] callJoinAllowlist invoked');
+
   const networkId = import.meta.env.VITE_NETWORK || 'preview';
   setNetworkId(networkId);
 

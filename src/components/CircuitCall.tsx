@@ -31,8 +31,14 @@ export function CircuitCall({
   }, [contractAddress]);
 
   const handleCall = async () => {
+    console.log('[AnonGate] handleCall triggered', { connected, hasAPI: !!connectedAPI, hasModule: !!contractModule });
+
     if (!connected || !connectedAPI || !contractModule) {
-      setError('Connect Lace first to submit the proof.');
+      const why = !connected ? 'wallet not connected' : !connectedAPI ? 'no ConnectedAPI' : 'contract module not loaded yet';
+      console.warn('[AnonGate] handleCall guard blocked:', why);
+      setError(why === 'contract module not loaded yet'
+        ? 'Contract module is still loading. Please wait and try again.'
+        : 'Connect Lace first to submit the proof.');
       await onConnectRequired();
       return;
     }
@@ -57,6 +63,7 @@ export function CircuitCall({
       setSecretCode('');
       window.localStorage.setItem('anongate-last-proof', 'proved');
     } catch (err) {
+      console.error('[AnonGate] joinAllowlist failed:', err);
       const message = err instanceof Error ? err.message : 'The proof submission failed.';
       setError(message);
     } finally {

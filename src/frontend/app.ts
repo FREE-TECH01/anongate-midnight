@@ -22,6 +22,7 @@ export async function joinAllowlist(params: JoinAllowlistParams): Promise<JoinSt
   const normalized = normalizeSecretCode(secretCode);
   const masked = maskSecretCode(normalized);
 
+  console.log('[AnonGate] joinAllowlist called, calling callJoinAllowlist...');
   const result = await callJoinAllowlist(contractModule, contractAddress, normalized, connectedAPI);
 
   return {
