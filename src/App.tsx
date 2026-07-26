@@ -26,9 +26,10 @@ export function App() {
     })();
   }, []);
 
+  const networkId = import.meta.env.VITE_NETWORK || 'preview';
   const networkLabel = useMemo(
-    () => (midnight.address ? 'Preview / Preprod-ready' : 'Disconnected'),
-    [midnight.address],
+    () => (midnight.address ? `${networkId} (connected)` : 'Disconnected'),
+    [midnight.address, networkId],
   );
 
   return (
