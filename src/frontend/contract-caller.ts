@@ -51,14 +51,17 @@ export async function callJoinAllowlist(
 
   try {
     provingProvider = await connectedAPI.getProvingProvider(keyMaterialProvider);
+    console.log('[AnonGate] Got Lace provingProvider:', !!provingProvider);
     if (provingProvider && typeof provingProvider.prove === 'function') {
       proofProvider = createProofProvider(provingProvider);
+      console.log('[AnonGate] Using Lace proving provider');
     }
-  } catch {
-    // Lace proving provider not available — fall back to proof server
+  } catch (err) {
+    console.error('[AnonGate] Lace proving provider error:', err);
   }
 
   if (!proofProvider) {
+    console.log('[AnonGate] Falling back to HTTP proof server');
     const proofServerUrl =
       networkId === 'preprod'
         ? 'https://proof-server.preprod.midnight.network'
@@ -81,26 +84,44 @@ export async function callJoinAllowlist(
     getCoinPublicKey: () => coinPublicKey,
     getEncryptionPublicKey: () => walletEncryptionPublicKey,
     balanceTx: async (tx: any) => {
+      console.log('[AnonGate] walletProvider.balanceTx called');
       const serialized = tx.serialize() as Uint8Array;
       const hex = bytesToHex(serialized);
-      const result = await connectedAPI.balanceUnsealedTransaction(hex);
-      const balancedBytes = hexToBytes(result.tx);
-      return (tx.constructor as any).deserialize(
-        'signature',
-        'proof',
-        'binding',
-        balancedBytes,
-      );
+      console.log('[AnonGate] Serialized tx length:', serialized.length);
+      console.log('[AnonGate] Calling balanceUnsealedTransaction...');
+      try {
+        const result = await connectedAPI.balanceUnsealedTransaction(hex);
+        console.log('[AnonGate] balanceUnsealedTransaction result:', result);
+        const balancedBytes = hexToBytes(result.tx);
+        console.log('[AnonGate] Balanced tx length:', balancedBytes.length);
+        return (tx.constructor as any).deserialize(
+          'signature',
+          'proof',
+          'binding',
+          balancedBytes,
+        );
+      } catch (err) {
+        console.error('[AnonGate] balanceUnsealedTransaction failed:', err);
+        throw err;
+      }
     },
   };
 
   const midnightProvider = {
     submitTx: async (tx: any) => {
+      console.log('[AnonGate] midnightProvider.submitTx called');
       const serialized = tx.serialize() as Uint8Array;
       const hex = bytesToHex(serialized);
-      await connectedAPI.submitTransaction(hex);
-      const ids = tx.identifiers() as string[];
-      return ids[0] ?? tx.hash();
+      console.log('[AnonGate] Submitting transaction...');
+      try {
+        await connectedAPI.submitTransaction(hex);
+        console.log('[AnonGate] Transaction submitted successfully');
+        const ids = tx.identifiers() as string[];
+        return ids[0] ?? tx.hash();
+      } catch (err) {
+        console.error('[AnonGate] submitTransaction failed:', err);
+        throw err;
+      }
     },
   };
 
@@ -128,6 +149,7 @@ export async function callJoinAllowlist(
     importSigningKeys: async () => ({ imported: 0, skipped: 0, overwritten: 0 }),
   };
 
+  console.log('[AnonGate] Calling createUnprovenCallTx...');
   const unprovenTxData = await createUnprovenCallTx(
     { zkConfigProvider, publicDataProvider, walletProvider } as any,
     {
@@ -138,6 +160,7 @@ export async function callJoinAllowlist(
       coinPublicKey,
     } as any,
   );
+  console.log('[AnonGate] createUnprovenCallTx returned');
 
   let memberCountBefore = 0;
   try {
@@ -159,12 +182,12 @@ export async function callJoinAllowlist(
     privateStateProvider,
   } as any;
 
+  console.log('[AnonGate] Calling submitTxAsync...');
   const txId = await submitTxAsync(providers, {
     unprovenTx: (unprovenTxData as any).private?.unprovenTx,
     circuitId: 'joinAllowlist' as any,
   });
-
-  console.log('[AnonGate] Transaction submitted via Lace:', txId);
+  console.log('[AnonGate] submitTxAsync returned txId:', txId);
 
   let finalized: FinalizedTxData | null = null;
   try {
