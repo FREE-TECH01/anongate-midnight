@@ -31,6 +31,9 @@ export interface AddMemberResult {
   txId: string;
 }
 
+export const LEVEL3_DEPLOYMENT_ERROR =
+  'The configured address does not contain the Level 3 Merkle allowlist. Set VITE_CONTRACT_ADDRESS to a Level 3 deployment before submitting this transaction.';
+
 interface BrowserProviders {
   zkConfigProvider: BrowserZkConfigProvider;
   publicDataProvider: any;
@@ -216,6 +219,29 @@ function credentialHash(contractModule: any, credential: string): Uint8Array {
   return hash;
 }
 
+export function readLevel3Ledger(contractModule: any, stateData: unknown): any {
+  try {
+    const ledger = contractModule.AnonGate.ledger(stateData);
+    const adminPublicKey = ledger.adminPublicKey;
+    const memberRoot = ledger.memberRoot;
+    const usedNullifiers = ledger.usedNullifiers;
+
+    if (
+      !adminPublicKey ||
+      typeof adminPublicKey.length !== 'number' ||
+      adminPublicKey.length !== 32 ||
+      typeof memberRoot?.findPathForLeaf !== 'function' ||
+      typeof usedNullifiers?.size !== 'function'
+    ) {
+      throw new Error('Level 3 ledger fields are missing');
+    }
+
+    return ledger;
+  } catch {
+    throw new Error(LEVEL3_DEPLOYMENT_ERROR);
+  }
+}
+
 export async function callAddMember(
   contractModule: any,
   contractAddress: string,
@@ -224,12 +250,10 @@ export async function callAddMember(
 ): Promise<AddMemberResult> {
   const providers = await createBrowserProviders(connectedAPI);
   const currentState = await providers.publicDataProvider.queryContractState(contractAddress);
-  const currentLedger = currentState?.data ? contractModule.AnonGate.ledger(currentState.data) : null;
-  if (!currentLedger?.memberRoot?.findPathForLeaf) {
-    throw new Error(
-      'The configured address is the legacy Level 2 contract. Set VITE_CONTRACT_ADDRESS to a Level 3 deployment.',
-    );
+  if (!currentState?.data) {
+    throw new Error('The allowlist contract has no readable state on this network.');
   }
+  readLevel3Ledger(contractModule, currentState.data);
   const hash = credentialHash(contractModule, credential);
   const result = await submitCircuit(
     contractModule,
@@ -254,12 +278,7 @@ export async function callJoinAllowlist(
     throw new Error('The allowlist contract has no readable state on this network.');
   }
 
-  const beforeLedger = contractModule.AnonGate.ledger(beforeState.data);
-  if (!beforeLedger.memberRoot?.findPathForLeaf) {
-    throw new Error(
-      'The configured address is the legacy Level 2 contract. Set VITE_CONTRACT_ADDRESS to a Level 3 deployment.',
-    );
-  }
+  const beforeLedger = readLevel3Ledger(contractModule, beforeState.data);
   const beforeCount = Number(beforeLedger.memberCount);
   const hash = credentialHash(contractModule, credential);
   const membershipPath = beforeLedger.memberRoot?.findPathForLeaf?.(hash);

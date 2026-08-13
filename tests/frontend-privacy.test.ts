@@ -5,6 +5,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AdminMember } from '../src/components/AdminMember';
 import { CircuitCall } from '../src/components/CircuitCall';
+import { LEVEL3_DEPLOYMENT_ERROR, readLevel3Ledger } from '../src/frontend/contract-caller';
 import { maskCredential, normalizeCredential } from '../src/frontend/utils';
 
 afterEach(() => {
@@ -111,5 +112,19 @@ describe('AdminMember privacy UI', () => {
     await waitFor(() => {
       expect(screen.getByText(/connect the admin lace wallet first/i)).toBeInTheDocument();
     });
+  });
+});
+
+describe('Level 3 deployment guard', () => {
+  it('converts an incompatible ledger index error into a user-facing message', () => {
+    const legacyModule = {
+      AnonGate: {
+        ledger: () => {
+          throw new Error('invalid operation for type: index out of bounds in idx: 3 >= 1');
+        },
+      },
+    };
+
+    expect(() => readLevel3Ledger(legacyModule, {})).toThrow(LEVEL3_DEPLOYMENT_ERROR);
   });
 });
