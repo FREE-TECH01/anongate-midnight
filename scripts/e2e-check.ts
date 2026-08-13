@@ -22,7 +22,7 @@ import { CompiledContract } from '@midnight-ntwrk/midnight-js-protocol/compact-j
 globalThis.WebSocket = WebSocket;
 
 // Must match the privateStateId used at deploy time (witness-free → empty state).
-const PRIVATE_STATE_ID = 'helloWorldPrivateState';
+const PRIVATE_STATE_ID = 'anongatePrivateState';
 
 // ─── Network configuration ─────────────────────────────────────────────────────
 
@@ -114,6 +114,17 @@ async function main() {
   if (!onChainState) {
     await walletCtx.wallet.stop();
     fail(`queryContractState returned null for ${deployment.address}`);
+  }
+
+  try {
+    const ledgerState = HelloWorld.ledger(onChainState.data);
+    if (!ledgerState.memberRoot || !ledgerState.usedNullifiers) {
+      await walletCtx.wallet.stop();
+      fail('Deployment address contains the pre-Level-3 contract; deploy the Merkle allowlist first.');
+    }
+  } catch (err: any) {
+    await walletCtx.wallet.stop();
+    fail(`Could not decode the Merkle allowlist ledger: ${err?.message ?? err}`);
   }
 
   console.log(`✅ e2e-check passed`);

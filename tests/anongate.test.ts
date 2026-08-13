@@ -16,7 +16,7 @@ import { CompiledContract } from '@midnight-ntwrk/midnight-js-protocol/compact-j
 // @ts-expect-error wallet sync requires WebSocket
 globalThis.WebSocket = WebSocket;
 
-const PRIVATE_STATE_ID = 'helloWorldPrivateState';
+const PRIVATE_STATE_ID = 'anongatePrivateState';
 const { network, config: networkConfig } = resolveNetwork();
 const SEED = getOrCreateSeed(network);
 
@@ -99,7 +99,13 @@ describe('AnonGate — joinAllowlist circuit', () => {
   it('increments memberCount by 1 on a single join', async () => {
     const deployment = getDeployment(network)!;
     const before = await readMemberCount(deployment);
-    await deployed.callTx.joinAllowlist('test-secret-alpha');
+    const credential = `test-credential-${Date.now()}`;
+    const hash = AnonGate.pureCircuits.credentialHash(credential);
+    await deployed.callTx.addMember(hash);
+    const state = await providers.publicDataProvider.queryContractState(deployment.address);
+    const path = AnonGate.ledger(state!.data).memberRoot.findPathForLeaf(hash);
+    if (!path) throw new Error('Approved credential path was not found after addMember.');
+    await deployed.callTx.joinAllowlist(credential, path);
     const after = await readMemberCount(deployment);
     expect(after).toBe(before + 1n);
   }, 90_000);
@@ -109,7 +115,7 @@ describe('AnonGate — joinAllowlist circuit', () => {
     const state = await providers.publicDataProvider.queryContractState(deployment.address);
     const ledgerState = AnonGate.ledger(state!.data);
     const keys = Object.keys(ledgerState);
-    expect(keys).toContain('memberCount');
-    expect(keys.some((k) => /secret|code/i.test(k))).toBe(false);
+    expect(keys).toEqual(expect.arrayContaining(['memberRoot', 'memberCount', 'usedNullifiers', 'adminPublicKey']));
+    expect(keys.some((k) => /secret|code|credential/i.test(k))).toBe(false);
   }, 30_000);
 });
