@@ -9,6 +9,8 @@ import type { ContractModule } from './frontend/contract-loader';
 const CONTRACT_ADDRESS =
   import.meta.env.VITE_CONTRACT_ADDRESS ||
   '48df3d01d2a381c2e967deaff0d64d8a8df9bda927290036b163326aecd210d8';
+const LEGACY_PREVIEW_ADDRESS =
+  '48df3d01d2a381c2e967deaff0d64d8a8df9bda927290036b163326aecd210d8';
 
 export function App() {
   const midnight = useMidnight();
@@ -32,6 +34,7 @@ export function App() {
     () => (midnight.address ? `${networkId} (connected)` : 'Disconnected'),
     [midnight.address, networkId],
   );
+  const legacyDeployment = networkId === 'preview' && CONTRACT_ADDRESS === LEGACY_PREVIEW_ADDRESS;
 
   return (
     <main className="app-shell">
@@ -56,6 +59,12 @@ export function App() {
             Failed to load the contract module. Run <code>npm run compile</code> and refresh.
             <br />
             <small>{contractLoadError}</small>
+          </div>
+        )}
+        {legacyDeployment && (
+          <div className="warning hero-error" role="status">
+            The configured Preview address is the legacy Level 2 contract. A fresh Level 3 deployment is
+            required before Merkle membership transactions can run.
           </div>
         )}
         {!contractModule && !contractLoadError && (

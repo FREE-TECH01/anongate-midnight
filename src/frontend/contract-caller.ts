@@ -166,7 +166,6 @@ async function submitCircuit(
   contractAddress: string,
   circuitId: string,
   args: unknown[],
-  connectedAPI: ConnectedAPI,
   providers: BrowserProviders,
 ): Promise<{ txId: string; finalized: FinalizedTxData | null }> {
   const unprovenTxData = await createUnprovenCallTx(
@@ -224,13 +223,19 @@ export async function callAddMember(
   connectedAPI: ConnectedAPI,
 ): Promise<AddMemberResult> {
   const providers = await createBrowserProviders(connectedAPI);
+  const currentState = await providers.publicDataProvider.queryContractState(contractAddress);
+  const currentLedger = currentState?.data ? contractModule.AnonGate.ledger(currentState.data) : null;
+  if (!currentLedger?.memberRoot?.findPathForLeaf) {
+    throw new Error(
+      'The configured address is the legacy Level 2 contract. Set VITE_CONTRACT_ADDRESS to a Level 3 deployment.',
+    );
+  }
   const hash = credentialHash(contractModule, credential);
   const result = await submitCircuit(
     contractModule,
     contractAddress,
     'addMember',
     [hash],
-    connectedAPI,
     providers,
   );
 
@@ -250,6 +255,11 @@ export async function callJoinAllowlist(
   }
 
   const beforeLedger = contractModule.AnonGate.ledger(beforeState.data);
+  if (!beforeLedger.memberRoot?.findPathForLeaf) {
+    throw new Error(
+      'The configured address is the legacy Level 2 contract. Set VITE_CONTRACT_ADDRESS to a Level 3 deployment.',
+    );
+  }
   const beforeCount = Number(beforeLedger.memberCount);
   const hash = credentialHash(contractModule, credential);
   const membershipPath = beforeLedger.memberRoot?.findPathForLeaf?.(hash);
@@ -262,7 +272,6 @@ export async function callJoinAllowlist(
     contractAddress,
     'joinAllowlist',
     [credential, membershipPath],
-    connectedAPI,
     providers,
   );
 
