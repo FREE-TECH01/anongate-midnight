@@ -5,22 +5,67 @@ import CompactStandardLibrary;
 // AnonGate — privacy-preserving allowlist membership
 //
 // PUBLIC (on-chain, anyone can see):
+//   - memberRoot: the Merkle root of approved credential hashes
 //   - memberCount: how many members have joined, total only
+//   - usedNullifiers: one-way values preventing a credential replay
+//   - adminPublicKey: the deployer's shielded public key
 //
 // PRIVATE (never touches the ledger):
-//   - secretCode: each circuit call's input is private by default
-//     in Compact; we never disclose() it, so it's never written
-//     on-chain and no observer can learn who joined or what
-//     code they used.
+//   - credential and membershipPath passed to joinAllowlist
+//   - the original credential is never disclosed or written on-chain
 // ============================================================
 
-// Public ledger state - visible on blockchain
+// A depth-32 tree gives the allowlist up to 2^32 leaf positions. The tree
+// stores credential hashes as its values; the Merkle ADT hashes those values
+// into its leaves, so the normal path-root helper is used below.
+export ledger memberRoot: MerkleTree<32, Bytes<32>>;
 export ledger memberCount: Counter;
+export ledger usedNullifiers: Set<Bytes<32>>;
+export ledger adminPublicKey: Bytes<32>;
 
-// Circuit to join the allowlist.
-// secretCode is a private witness input (circuit parameters are
-// private by default) - it proves *a* valid join happened without
-// revealing who joined or what code they used.
-export circuit joinAllowlist(secretCode: Opaque<"string">): [] {
+// Compact 0.31.1 cannot apply persistentHash directly to an Opaque value.
+// Normalize the private string through the standard transient hash first,
+// then persistently hash the resulting Bytes<32> value for stable ledger data.
+export pure circuit credentialHash(credential: Opaque<"string">): Bytes<32> {
+    const credentialDigest = upgradeFromTransient(
+        transientHash<Opaque<"string">>(credential),
+    );
+    return persistentHash<Vector<2, Bytes<32>>>([
+        pad(32, "anongate:credential:v1"),
+        credentialDigest,
+    ]);
+}
+
+constructor(adminKey: Bytes<32>) {
+    adminPublicKey = disclose(adminKey);
+}
+
+// Only the deployer's shielded public key can add an approved credential hash.
+// The hash is intentionally disclosed because it becomes a public Merkle leaf;
+// the credential used later to open the membership proof remains private.
+export circuit addMember(credentialHashValue: Bytes<32>): [] {
+    assert(ownPublicKey().bytes == adminPublicKey, "only the admin can add members");
+    memberRoot.insert(disclose(credentialHashValue));
+}
+
+// The credential and Merkle path are private circuit inputs. A caller can
+// produce a valid root only when the credential hashes to the approved leaf
+// and the supplied path belongs to the current public tree.
+export circuit joinAllowlist(
+    credential: Opaque<"string">,
+    membershipPath: MerkleTreePath<32, Bytes<32>>,
+): [] {
+    const hash = credentialHash(credential);
+    assert(membershipPath.leaf == hash, "credential is not approved");
+
+    const candidateRoot = merkleTreePathRoot<32, Bytes<32>>(membershipPath);
+    assert(memberRoot.checkRoot(disclose(candidateRoot)), "invalid membership proof");
+
+    const nullifier = persistentHash<Vector<2, Bytes<32>>>([
+        pad(32, "anongate:nullifier:v1"),
+        hash,
+    ]);
+    assert(!usedNullifiers.member(disclose(nullifier)), "credential was already used");
+    usedNullifiers.insert(disclose(nullifier));
     memberCount.increment(1);
 }
