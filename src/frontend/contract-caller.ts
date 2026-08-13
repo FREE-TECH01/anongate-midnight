@@ -27,41 +27,41 @@ export interface ContractCallResult {
   memberCount: number;
 }
 
-export async function callJoinAllowlist(
-  contractModule: any,
-  contractAddress: string,
-  secretCode: string,
-  connectedAPI: ConnectedAPI,
-): Promise<ContractCallResult> {
-  console.log('[AnonGate] callJoinAllowlist invoked');
+export interface AddMemberResult {
+  txId: string;
+}
 
+interface BrowserProviders {
+  zkConfigProvider: BrowserZkConfigProvider;
+  publicDataProvider: any;
+  proofProvider: any;
+  walletProvider: any;
+  midnightProvider: any;
+  privateStateProvider: any;
+}
+
+async function createBrowserProviders(connectedAPI: ConnectedAPI): Promise<BrowserProviders> {
   const networkId = import.meta.env.VITE_NETWORK || 'preview';
   setNetworkId(networkId);
 
   const zkConfigProvider = new BrowserZkConfigProvider();
-
   const shieldedAddresses = await connectedAPI.getShieldedAddresses();
   const coinPublicKey = shieldedAddresses.shieldedCoinPublicKey;
   const walletEncryptionPublicKey = shieldedAddresses.shieldedEncryptionPublicKey;
-
   const keyMaterialProvider = zkConfigProvider.asKeyMaterialProvider();
 
   let provingProvider: any = null;
   let proofProvider: any = null;
-
   try {
     provingProvider = await connectedAPI.getProvingProvider(keyMaterialProvider);
-    console.log('[AnonGate] Got Lace provingProvider:', !!provingProvider);
     if (provingProvider && typeof provingProvider.prove === 'function') {
       proofProvider = createProofProvider(provingProvider);
-      console.log('[AnonGate] Using Lace proving provider');
     }
-  } catch (err) {
-    console.error('[AnonGate] Lace proving provider error:', err);
+  } catch {
+    // Lace proving is optional; the public proof server is the fallback.
   }
 
   if (!proofProvider) {
-    console.log('[AnonGate] Falling back to HTTP proof server');
     const proofServerUrl =
       networkId === 'preprod'
         ? 'https://proof-server.preprod.midnight.network'
@@ -77,51 +77,30 @@ export async function callJoinAllowlist(
     networkId === 'preprod'
       ? 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws'
       : 'wss://indexer.preview.midnight.network/api/v4/graphql/ws';
-
   const publicDataProvider = indexerPublicDataProvider(indexerUrl, indexerWsUrl);
 
   const walletProvider = {
     getCoinPublicKey: () => coinPublicKey,
     getEncryptionPublicKey: () => walletEncryptionPublicKey,
     balanceTx: async (tx: any) => {
-      console.log('[AnonGate] walletProvider.balanceTx called');
       const serialized = tx.serialize() as Uint8Array;
-      const hex = bytesToHex(serialized);
-      console.log('[AnonGate] Serialized tx length:', serialized.length);
-      console.log('[AnonGate] Calling balanceUnsealedTransaction...');
-      try {
-        const result = await connectedAPI.balanceUnsealedTransaction(hex);
-        console.log('[AnonGate] balanceUnsealedTransaction result:', result);
-        const balancedBytes = hexToBytes(result.tx);
-        console.log('[AnonGate] Balanced tx length:', balancedBytes.length);
-        return (tx.constructor as any).deserialize(
-          'signature',
-          'proof',
-          'binding',
-          balancedBytes,
-        );
-      } catch (err) {
-        console.error('[AnonGate] balanceUnsealedTransaction failed:', err);
-        throw err;
-      }
+      const result = await connectedAPI.balanceUnsealedTransaction(bytesToHex(serialized));
+      const balancedBytes = hexToBytes(result.tx);
+      return (tx.constructor as any).deserialize(
+        'signature',
+        'proof',
+        'binding',
+        balancedBytes,
+      );
     },
   };
 
   const midnightProvider = {
     submitTx: async (tx: any) => {
-      console.log('[AnonGate] midnightProvider.submitTx called');
       const serialized = tx.serialize() as Uint8Array;
-      const hex = bytesToHex(serialized);
-      console.log('[AnonGate] Submitting transaction...');
-      try {
-        await connectedAPI.submitTransaction(hex);
-        console.log('[AnonGate] Transaction submitted successfully');
-        const ids = tx.identifiers() as string[];
-        return ids[0] ?? tx.hash();
-      } catch (err) {
-        console.error('[AnonGate] submitTransaction failed:', err);
-        throw err;
-      }
+      await connectedAPI.submitTransaction(bytesToHex(serialized));
+      const ids = tx.identifiers() as string[];
+      return ids[0] ?? tx.hash();
     },
   };
 
@@ -149,59 +128,77 @@ export async function callJoinAllowlist(
     importSigningKeys: async () => ({ imported: 0, skipped: 0, overwritten: 0 }),
   };
 
-  console.log('[AnonGate] Calling createUnprovenCallTx...');
-  const unprovenTxData = await createUnprovenCallTx(
-    { zkConfigProvider, publicDataProvider, walletProvider } as any,
-    {
-      compiledContract: contractModule.compiledContract,
-      contractAddress,
-      circuitId: 'joinAllowlist' as any,
-      args: [secretCode],
-      coinPublicKey,
-    } as any,
-  );
-  console.log('[AnonGate] createUnprovenCallTx returned');
-
-  let memberCountBefore = 0;
-  try {
-    const beforeState = await publicDataProvider.queryContractState(contractAddress);
-    if (beforeState?.data) {
-      const beforeLedger = contractModule.AnonGate.ledger(beforeState.data);
-      memberCountBefore = Number(beforeLedger.memberCount);
-    }
-  } catch {
-    // best effort — use 0 as fallback
-  }
-
-  const providers = {
+  return {
     zkConfigProvider,
     publicDataProvider,
     proofProvider,
     walletProvider,
     midnightProvider,
     privateStateProvider,
-  } as any;
+  };
+}
 
-  console.log('[AnonGate] Calling submitTxAsync...');
-  const txId = await submitTxAsync(providers, {
-    unprovenTx: (unprovenTxData as any).private?.unprovenTx,
-    circuitId: 'joinAllowlist' as any,
-  });
-  console.log('[AnonGate] submitTxAsync returned txId:', txId);
-
-  let finalized: FinalizedTxData | null = null;
+async function waitForFinalization(
+  publicDataProvider: any,
+  txId: string,
+): Promise<FinalizedTxData | null> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
-    finalized = await Promise.race([
+    return await Promise.race([
       publicDataProvider.watchForTxData(txId),
-      new Promise<FinalizedTxData>((_, reject) =>
-        setTimeout(() => reject(new Error('Timed out waiting for transaction finalization')), 30_000),
-      ),
+      new Promise<FinalizedTxData>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error('Timed out waiting for transaction finalization')),
+          30_000,
+        );
+      }),
     ]);
-    console.log('[AnonGate] Transaction finalized:', finalized.status);
   } catch {
-    console.warn('[AnonGate] Transaction not yet finalized on chain — will poll for state changes...');
+    console.warn('[AnonGate] Transaction not yet finalized — polling public state instead.');
+    return null;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+async function submitCircuit(
+  contractModule: any,
+  contractAddress: string,
+  circuitId: string,
+  args: unknown[],
+  connectedAPI: ConnectedAPI,
+  providers: BrowserProviders,
+): Promise<{ txId: string; finalized: FinalizedTxData | null }> {
+  const unprovenTxData = await createUnprovenCallTx(
+    {
+      zkConfigProvider: providers.zkConfigProvider,
+      publicDataProvider: providers.publicDataProvider,
+      walletProvider: providers.walletProvider,
+    } as any,
+    {
+      compiledContract: contractModule.compiledContract,
+      contractAddress,
+      circuitId: circuitId as any,
+      args,
+      coinPublicKey: providers.walletProvider.getCoinPublicKey(),
+    } as any,
+  );
+
+  const unprovenTx = (unprovenTxData as any).private?.unprovenTx;
+  if (!unprovenTx) {
+    throw new Error('Midnight SDK did not create a transaction for this circuit.');
   }
 
+  const txId = await submitTxAsync(
+    providers as any,
+    {
+      unprovenTx,
+      circuitId: circuitId as any,
+    },
+  );
+  console.log(`[AnonGate] ${circuitId} transaction submitted:`, txId);
+
+  const finalized = await waitForFinalization(providers.publicDataProvider, txId);
   if (finalized && finalized.status !== SucceedEntirely) {
     throw new Error(
       `Transaction was not fully successful (status: ${finalized.status}). ` +
@@ -209,22 +206,79 @@ export async function callJoinAllowlist(
     );
   }
 
-  let memberCount = memberCountBefore;
+  return { txId: finalized?.txId ?? txId, finalized };
+}
+
+function credentialHash(contractModule: any, credential: string): Uint8Array {
+  const hash = contractModule.AnonGate.pureCircuits?.credentialHash?.(credential);
+  if (!(hash instanceof Uint8Array) || hash.length !== 32) {
+    throw new Error('The compiled contract cannot derive a credential hash. Recompile it first.');
+  }
+  return hash;
+}
+
+export async function callAddMember(
+  contractModule: any,
+  contractAddress: string,
+  credential: string,
+  connectedAPI: ConnectedAPI,
+): Promise<AddMemberResult> {
+  const providers = await createBrowserProviders(connectedAPI);
+  const hash = credentialHash(contractModule, credential);
+  const result = await submitCircuit(
+    contractModule,
+    contractAddress,
+    'addMember',
+    [hash],
+    connectedAPI,
+    providers,
+  );
+
+  return { txId: result.txId };
+}
+
+export async function callJoinAllowlist(
+  contractModule: any,
+  contractAddress: string,
+  credential: string,
+  connectedAPI: ConnectedAPI,
+): Promise<ContractCallResult> {
+  const providers = await createBrowserProviders(connectedAPI);
+  const beforeState = await providers.publicDataProvider.queryContractState(contractAddress);
+  if (!beforeState?.data) {
+    throw new Error('The allowlist contract has no readable state on this network.');
+  }
+
+  const beforeLedger = contractModule.AnonGate.ledger(beforeState.data);
+  const beforeCount = Number(beforeLedger.memberCount);
+  const hash = credentialHash(contractModule, credential);
+  const membershipPath = beforeLedger.memberRoot?.findPathForLeaf?.(hash);
+  if (!membershipPath) {
+    throw new Error('This credential is not in the approved allowlist.');
+  }
+
+  const result = await submitCircuit(
+    contractModule,
+    contractAddress,
+    'joinAllowlist',
+    [credential, membershipPath],
+    connectedAPI,
+    providers,
+  );
+
+  let memberCount = beforeCount;
   for (let attempt = 0; attempt < 10; attempt++) {
-    const state = await publicDataProvider.queryContractState(contractAddress);
+    const state = await providers.publicDataProvider.queryContractState(contractAddress);
     if (state?.data) {
       const ledgerState = contractModule.AnonGate.ledger(state.data);
       memberCount = Number(ledgerState.memberCount);
-      if (memberCount > memberCountBefore) {
-        console.log('[AnonGate] Member count increased from', memberCountBefore, 'to', memberCount);
-        break;
-      }
+      if (memberCount > beforeCount) break;
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
 
   return {
-    txId: finalized?.txId ?? txId,
+    txId: result.txId,
     memberCount,
   };
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { WalletConnect } from './components/WalletConnect';
 import { CircuitCall } from './components/CircuitCall';
+import { AdminMember } from './components/AdminMember';
 import { useMidnight } from './hooks/useMidnight';
 import { loadContractModule } from './frontend/contract-loader';
 import type { ContractModule } from './frontend/contract-loader';
@@ -71,6 +72,13 @@ export function App() {
           onDisconnect={midnight.disconnect}
         />
         <CircuitCall
+          contractAddress={CONTRACT_ADDRESS}
+          connected={midnight.status === 'connected'}
+          connectedAPI={midnight.connectedAPI}
+          contractModule={contractModule}
+          onConnectRequired={midnight.connect}
+        />
+        <AdminMember
           contractAddress={CONTRACT_ADDRESS}
           connected={midnight.status === 'connected'}
           connectedAPI={midnight.connectedAPI}

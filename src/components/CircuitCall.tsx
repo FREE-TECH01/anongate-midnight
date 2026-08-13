@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
 import type { ContractModule } from '../frontend/contract-loader';
 import { joinAllowlist } from '../frontend/app';
-import { maskSecretCode, normalizeSecretCode } from '../frontend/utils';
+import { maskCredential, normalizeCredential } from '../frontend/utils';
 
 function safeStringify(value: unknown): string {
   const seen = new WeakSet();
@@ -55,7 +55,7 @@ export function CircuitCall({
   contractModule,
   onConnectRequired,
 }: CircuitCallProps) {
-  const [secretCode, setSecretCode] = useState('');
+  const [credential, setCredential] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,9 +98,9 @@ export function CircuitCall({
     setResult(null);
 
     try {
-      const normalized = normalizeSecretCode(secretCode);
+      const normalized = normalizeCredential(credential);
       const submission = await joinAllowlist({
-        secretCode: normalized,
+        credential: normalized,
         contractAddress,
         connectedAPI,
         contractModule,
@@ -110,7 +110,7 @@ export function CircuitCall({
         submission.message ||
           'Submission accepted. The private value stays local and is never shown on screen.',
       );
-      setSecretCode('');
+      setCredential('');
       window.localStorage.setItem('anongate-last-proof', 'proved');
     } catch (err) {
       console.error('[AnonGate] joinAllowlist failed:', err);
@@ -136,30 +136,30 @@ export function CircuitCall({
     <section className="card" aria-labelledby="circuit-heading">
       <h2 id="circuit-heading">Join the allowlist</h2>
       <p className="muted">
-        Your secret stays private while the public ledger shows only the proof-based activity.
+         Your credential and Merkle path stay private while the public ledger shows only proof-based activity.
       </p>
       <p className="muted">Contract: {maskedAddress}</p>
 
       <div className="privacy-panels" role="group" aria-label="Private and public views">
         <div className="privacy-panel privacy-panel--private" aria-label="Private input panel">
           <div className="privacy-label">🔒 Private</div>
-          <label className="sr-only" htmlFor="private-secret-code">
-            Private secret code
+          <label className="sr-only" htmlFor="private-credential">
+             Private credential
           </label>
           <input
-            id="private-secret-code"
+             id="private-credential"
             type="password"
             autoComplete="off"
-            value={secretCode}
-            onChange={(event) => setSecretCode(event.target.value)}
-            placeholder="Enter your private secret"
+             value={credential}
+             onChange={(event) => setCredential(event.target.value)}
+             placeholder="Enter your private credential"
             aria-describedby="private-help"
           />
           <p id="private-help" className="panel-help">
-            Typed here only. Never sent to the public view.
+             Typed here only. The credential and Merkle path are private circuit inputs.
           </p>
-          <div className="masked-value" aria-label="masked secret preview">
-            {maskSecretCode(secretCode || 'placeholder')}
+          <div className="masked-value" aria-label="masked credential preview">
+             {maskCredential(credential || 'placeholder')}
           </div>
         </div>
 
@@ -170,14 +170,15 @@ export function CircuitCall({
           </div>
           <p className="panel-stat">Members seen on-chain: {memberCount}</p>
           <p className="panel-help">
-            Observers can see activity and the public counter, but not the secret you used.
+             Observers can see the root, nullifier, activity, and counter, but not the credential.
           </p>
         </div>
       </div>
 
       <div className="button-row">
-        <button onClick={() => void handleCall()} disabled={buttonDisabled}>
-          {buttonLabel}
+         <button onClick={() => void handleCall()} disabled={buttonDisabled} aria-busy={isLoading}>
+           {isLoading ? <span className="spinner" aria-hidden="true" /> : null}
+           {buttonLabel}
         </button>
         {walletPending ? (
           <p className="panel-help">
