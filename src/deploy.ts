@@ -19,13 +19,14 @@ import { indexerPublicDataProvider } from '@midnight-ntwrk/midnight-js-indexer-p
 import { levelPrivateStateProvider } from '@midnight-ntwrk/midnight-js-level-private-state-provider';
 import { NodeZkConfigProvider } from '@midnight-ntwrk/midnight-js-node-zk-config-provider';
 import { CompiledContract } from '@midnight-ntwrk/midnight-js-protocol/compact-js';
+import { encodeCoinPublicKey } from '@midnight-ntwrk/midnight-js-protocol/ledger';
 
 // @ts-expect-error Required for wallet sync
 globalThis.WebSocket = WebSocket;
 
 // Identifier under which this contract's private state is stored. The
-// hello-world contract has no witnesses, so its private state is empty ({}).
-const PRIVATE_STATE_ID = 'helloWorldPrivateState';
+// contract has no witnesses, so its private state is empty ({}).
+const PRIVATE_STATE_ID = 'anongatePrivateState';
 
 // ─── Network configuration ─────────────────────────────────────────────────────
 //
@@ -284,14 +285,12 @@ async function main() {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       // Midnight.js 4.1.x supplies private state via privateStateId +
-      // initialPrivateState (empty here — the hello-world contract has no
-      // witnesses). args is the contract constructor's arguments: empty for
-      // hello-world's no-arg constructor. (Statically-typed contracts can omit
-      // args entirely; this script loads the contract dynamically, so the
-      // conditional args type widens to any[] and an explicit [] is required.)
+      // initialPrivateState (empty here — the contract has no witnesses).
+      // The constructor stores the deployer's shielded public key as the
+      // admin key used by addMember.
       deployed = await deployContract(providers, {
         compiledContract: compiledContract as any,
-        args: [],
+        args: [encodeCoinPublicKey(walletCtx.shieldedSecretKeys.coinPublicKey)],
         privateStateId: PRIVATE_STATE_ID,
         initialPrivateState: {},
       });

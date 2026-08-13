@@ -24,7 +24,7 @@ globalThis.WebSocket = WebSocket;
 
 // Must match the privateStateId used at deploy time so the CLI reconnects to
 // the same private state. AnonGate has no witnesses (empty state).
-const PRIVATE_STATE_ID = 'helloWorldPrivateState';
+const PRIVATE_STATE_ID = 'anongatePrivateState';
 
 const { network, config: networkConfig } = resolveNetwork();
 const SEED = getOrCreateSeed(network);
@@ -150,19 +150,26 @@ async function main() {
     while (running) {
       console.log('─── Menu ───────────────────────────────────────────────────────');
       console.log('  1. Join the allowlist');
-      console.log('  2. Read current member count');
-      console.log('  3. Check wallet balance');
-      console.log('  4. Exit\n');
+      console.log('  2. Approve a credential (admin wallet)');
+      console.log('  3. Read current member count');
+      console.log('  4. Check wallet balance');
+      console.log('  5. Exit\n');
 
       const choice = await rl.question('  Your choice: ');
 
       switch (choice.trim()) {
         case '1': {
-          const secretCode = await rl.question('  Enter your private join code (never shown on-chain): ');
+          const credential = await rl.question('  Enter your private credential (never shown on-chain): ');
           console.log('\n  Submitting transaction (this may take 30-60 seconds)...');
           try {
-            const tx = await deployed.callTx.joinAllowlist(secretCode);
-            console.log(`\n  ✅ Joined the allowlist — your code was never disclosed publicly.`);
+            const state = await providers.publicDataProvider.queryContractState(deployment.address);
+            if (!state?.data) throw new Error('The contract has no readable state.');
+            const ledgerState = AnonGate.ledger(state.data);
+            const hash = AnonGate.pureCircuits.credentialHash(credential);
+            const path = ledgerState.memberRoot.findPathForLeaf(hash);
+            if (!path) throw new Error('This credential is not in the approved allowlist.');
+            const tx = await deployed.callTx.joinAllowlist(credential, path);
+            console.log(`\n  ✅ Joined the allowlist — your credential was never disclosed publicly.`);
             console.log(`  Transaction ID: ${tx.public.txId}`);
             console.log(`  Block height: ${tx.public.blockHeight}\n`);
           } catch (error) {
@@ -172,6 +179,21 @@ async function main() {
         }
 
         case '2': {
+          const credential = await rl.question('  Credential to approve: ');
+          console.log('\n  Adding the credential hash (admin authorization is checked on-chain)...');
+          try {
+            const hash = AnonGate.pureCircuits.credentialHash(credential);
+            const tx = await deployed.callTx.addMember(hash);
+            console.log(`\n  ✅ Credential approved — plaintext was never stored.`);
+            console.log(`  Transaction ID: ${tx.public.txId}`);
+            console.log(`  Block height: ${tx.public.blockHeight}\n`);
+          } catch (error) {
+            console.error('\n  ❌ Failed:', error instanceof Error ? error.message : error);
+          }
+          break;
+        }
+
+        case '3': {
           console.log('\n  Reading member count from blockchain...');
           try {
             const contractState = await providers.publicDataProvider.queryContractState(deployment.address);
@@ -187,7 +209,7 @@ async function main() {
           break;
         }
 
-        case '3': {
+        case '4': {
           console.log('\n  Checking balance...');
           const currentState = await walletCtx.wallet.waitForSyncedState();
           const currentBalance = currentState.unshielded.balances[unshieldedToken().raw] ?? 0n;
@@ -197,13 +219,13 @@ async function main() {
           break;
         }
 
-        case '4':
+        case '5':
           running = false;
           console.log('\n  👋 Goodbye!\n');
           break;
 
         default:
-          console.log('\n  ❌ Invalid choice. Please enter 1-4.\n');
+          console.log('\n  ❌ Invalid choice. Please enter 1-5.\n');
       }
     }
 
