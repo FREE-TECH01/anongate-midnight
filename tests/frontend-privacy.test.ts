@@ -127,4 +127,21 @@ describe('Level 3 deployment guard', () => {
 
     expect(() => readLevel3Ledger(legacyModule, {})).toThrow(LEVEL3_DEPLOYMENT_ERROR);
   });
+
+  it('catches a legacy state when its memberCount getter is out of bounds', () => {
+    const legacyModule = {
+      AnonGate: {
+        ledger: () => ({
+          get memberCount() {
+            throw new Error('invalid operation for type: index out of bounds in idx: 1 >= 1');
+          },
+          adminPublicKey: new Uint8Array(32),
+          memberRoot: { findPathForLeaf: () => undefined },
+          usedNullifiers: { size: () => 0n },
+        }),
+      },
+    };
+
+    expect(() => readLevel3Ledger(legacyModule, {})).toThrow(LEVEL3_DEPLOYMENT_ERROR);
+  });
 });

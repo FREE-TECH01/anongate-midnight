@@ -222,6 +222,7 @@ function credentialHash(contractModule: any, credential: string): Uint8Array {
 export function readLevel3Ledger(contractModule: any, stateData: unknown): any {
   try {
     const ledger = contractModule.AnonGate.ledger(stateData);
+    const memberCount = ledger.memberCount;
     const adminPublicKey = ledger.adminPublicKey;
     const memberRoot = ledger.memberRoot;
     const usedNullifiers = ledger.usedNullifiers;
@@ -230,6 +231,7 @@ export function readLevel3Ledger(contractModule: any, stateData: unknown): any {
       !adminPublicKey ||
       typeof adminPublicKey.length !== 'number' ||
       adminPublicKey.length !== 32 ||
+      (typeof memberCount !== 'bigint' && typeof memberCount !== 'number') ||
       typeof memberRoot?.findPathForLeaf !== 'function' ||
       typeof usedNullifiers?.size !== 'function'
     ) {
