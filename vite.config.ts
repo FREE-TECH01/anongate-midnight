@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -77,10 +77,5 @@ export default defineConfig({
   },
   define: {
     global: 'globalThis',
-  },
-  test: {
-    environment: 'jsdom',
-    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
-    exclude: ['tests/anongate.test.ts', 'node_modules/**'],
   },
 });
