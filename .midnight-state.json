@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "activeNetwork": "preview",
+  "wallets": {
+    "preview": {
+      "seed": "16cffc82b325fef46098e1a6134de8ba19bbbfb63a928e70e0b063227c5ecbd0",
+      "createdAt": "2026-07-22T23:59:23.060Z"
+    },
+    "preprod": {
+      "seed": "a9c1485afeb7d6e4ebc4f55bba02c35cc76be2e7b6b4ea568744342eacaa1340",
+      "createdAt": "2026-07-23T01:59:18.757Z"
+    }
+  },
+  "deployments": {
+    "preview": {
+      "address": "c48c096eef326433e97b3ba1b68169933c5d9024096ad67f4347831618eb6f85",
+      "deployer": "mn_addr_preview1mg9ky33cfv27mxhh9y5fxxll63hp60hgss9v0hdmam8zgh0lfr7qu8r5qh",
+      "deployedAt": "2026-08-21T04:36:15.350Z"
+    },
+    "undeployed": {
+      "address": "3881455b78ab27aaff1be4889bc565606ee28dfc7641a0bec7957723a647f477",
+      "deployer": "mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s",
+      "deployedAt": "2026-07-24T19:09:27.292Z"
+    }
+  }
+}

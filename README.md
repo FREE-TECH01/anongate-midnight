@@ -15,7 +15,7 @@ The hosted URL currently points at the Level 2 Preview deployment. The Level 3 c
 |---------|---------|--------|
 | Preprod | No address - RPC/indexer wallet sync stalled | Unavailable after one genuine retry |
 | Preview fallback (Level 2) | `48df3d01d2a381c2e967deaff0d64d8a8df9bda927290036b163326aecd210d8` | Live legacy contract |
-| Preview Level 3 | No address yet | Deploy when Preview RPC recovers |
+| Preview Level 3 | `c48c096eef326433e97b3ba1b68169933c5d9024096ad67f4347831618eb6f85` | Fresh Merkle allowlist deployment |
 
 The address above is the required working Preview fallback from Levels 1-2. It contains the old one-argument circuit, so it must not be mistaken for the new Merkle contract. Set `VITE_CONTRACT_ADDRESS` to a fresh Level 3 deployment before using the new browser circuits on a public network.
 
